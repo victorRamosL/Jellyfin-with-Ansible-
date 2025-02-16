@@ -1,0 +1,52 @@
+- name: Desplegar Jellyfin en Docker en localhost
+  hosts: localhost
+  become: yes
+  tasks:
+
+    - name: Crear directorios para Jellyfin
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: 1000
+        group: 1000
+        mode: '0755'
+      loop:
+        - /opt/jellyfin/config
+        - /opt/jellyfin/cache
+        - /opt/jellyfin/media
+
+    - name: Verificar si el contenedor Jellyfin ya está en ejecución
+      command: docker ps --format "{{ '{{' }}.Names{{ '}}' }}"
+      register: running_containers
+      changed_when: false
+
+    - name: Detener y eliminar contenedor existente si ya está corriendo
+      docker_container:
+        name: jellyfin
+        state: absent
+      when: "'jellyfin' in running_containers.stdout"
+
+    - name: Desplegar Jellyfin en Docker
+      docker_container:
+        name: jellyfin
+        image: jellyfin/jellyfin:latest
+        restart_policy: unless-stopped
+        network_mode: "host"
+        volumes:
+          - /opt/jellyfin/config:/config
+          - /opt/jellyfin/cache:/cache
+          - /opt/jellyfin/media:/media
+        env:
+          TZ: "America/New_York"
+
+    - name: Permitir tráfico en el puerto 8096 (HTTP)
+      ufw:
+        rule: allow
+        port: "8096"
+        proto: tcp
+
+    - name: Permitir tráfico en el puerto 8920 (HTTPS)
+      ufw:
+        rule: allow
+        port: "8920"
+        proto: tcp

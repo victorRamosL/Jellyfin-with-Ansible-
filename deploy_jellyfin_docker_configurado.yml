@@ -1,0 +1,303 @@
+- name: Desplegar Jellyfin en Docker en localhost
+  hosts: localhost
+  become: yes
+  tasks:
+
+    - name: Crear directorios para Jellyfin
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: 1000
+        group: 1000
+        mode: '0755'
+      loop:
+        - /opt/jellyfin/config
+        - /opt/jellyfin/config/users
+        - /opt/jellyfin/cache
+        - /opt/jellyfin/media
+        - /opt/jellyfin/config/data
+
+    - name: Asegurar permisos correctos en directorios de datos
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: 1000
+        group: 1000
+        mode: '0755'
+        recurse: yes
+      loop:
+        - /opt/jellyfin/config
+        - /opt/jellyfin/cache
+
+    - name: Crear archivo de configuración network.xml
+      copy:
+        dest: /opt/jellyfin/config/network.xml
+        content: |
+          <?xml version="1.0" encoding="utf-8"?>
+          <NetworkConfiguration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+            <RequireHttps>false</RequireHttps>
+            <EnableRemoteAccess>true</EnableRemoteAccess>
+            <EnableUPnP>true</EnableUPnP>
+            <PublicPort>8096</PublicPort>
+            <PublicHttpsPort>8920</PublicHttpsPort>
+          </NetworkConfiguration>
+
+    - name: Crear archivo de configuración encoding.xml
+      copy:
+        dest: /opt/jellyfin/config/encoding.xml
+        content: |
+          <?xml version="1.0" encoding="utf-8"?>
+          <EncodingOptions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+            <EncoderAppPath>/usr/lib/jellyfin-ffmpeg/ffmpeg</EncoderAppPath>
+            <EncoderAppPathDisplay>/usr/lib/jellyfin-ffmpeg/ffmpeg</EncoderAppPathDisplay>
+          </EncodingOptions>
+
+    - name: Crear archivo de configuración system.xml
+      copy:
+        dest: /opt/jellyfin/config/system.xml
+        content: |
+          <?xml version="1.0" encoding="utf-8"?>
+          <ServerConfiguration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+            <UICulture>es-ES</UICulture>
+            <MetadataCountryCode>ES</MetadataCountryCode>
+            <PreferredMetadataLanguage>es</PreferredMetadataLanguage>
+            <ServerName>Mi Servidor Jellyfin</ServerName>
+          </ServerConfiguration>
+        mode: '0644'
+        owner: 1000
+        group: 1000
+
+    - name: Crear archivo de configuración de usuario admin
+      copy:
+        dest: /opt/jellyfin/config/users/admin.json
+        content: |
+          {
+            "Name": "admin",
+            "Password": "7af2d10b73ab7cd8f603937f7697cb5fe432c7ff",
+            "HasPassword": true,
+            "HasConfiguredPassword": true,
+            "HasConfiguredEasyPassword": false,
+            "EnableAutoLogin": false,
+            "LastLoginDate": "2024-01-01T00:00:00.0000000Z",
+            "LastActivityDate": "2024-01-01T00:00:00.0000000Z",
+            "Configuration": {
+              "PlayDefaultAudioTrack": true,
+              "DisplayMissingEpisodes": false,
+              "SubtitleMode": "Default",
+              "EnableLocalPassword": true,
+              "OrderedViews": [],
+              "LatestItemsExcludes": [],
+              "MyMediaExcludes": [],
+              "HidePlayedInLatest": true,
+              "RememberAudioSelections": true,
+              "RememberSubtitleSelections": true,
+              "EnableNextEpisodeAutoPlay": true
+            },
+            "Policy": {
+              "IsAdministrator": true,
+              "IsHidden": false,
+              "IsDisabled": false,
+              "BlockedTags": [],
+              "EnableUserPreferenceAccess": true,
+              "AccessSchedules": [],
+              "BlockUnratedItems": [],
+              "EnableRemoteControlOfOtherUsers": true,
+              "EnableSharedDeviceControl": true,
+              "EnableRemoteAccess": true,
+              "EnableLiveTvManagement": true,
+              "EnableLiveTvAccess": true,
+              "EnableMediaPlayback": true,
+              "EnableAudioPlaybackTranscoding": true,
+              "EnableVideoPlaybackTranscoding": true,
+              "EnablePlaybackRemuxing": true,
+              "EnableContentDeletion": true,
+              "EnableContentDownloading": true,
+              "EnableSyncTranscoding": true,
+              "EnableMediaConversion": true,
+              "EnableAllDevices": true
+            }
+          }
+        mode: '0644'
+        owner: 1000
+        group: 1000
+
+    - name: Crear archivo de configuración de biblioteca
+      copy:
+        dest: /opt/jellyfin/config/data/library.db
+        content: |
+          {
+            "ItemCollections": [
+              {
+                "Name": "Mis Videos",
+                "Locations": ["/media"],
+                "CollectionType": "homevideos",
+                "IsLocked": false,
+                "EnableMediaTypes": ["Video"]
+              }
+            ]
+          }
+        mode: '0644'
+        owner: 1000
+        group: 1000
+
+    - name: Crear directorio para la biblioteca
+      file:
+        path: /opt/jellyfin/config/data/root
+        state: directory
+        mode: '0755'
+        owner: 1000
+        group: 1000
+
+    - name: Crear archivo de configuración de rutas de biblioteca
+      copy:
+        dest: /opt/jellyfin/config/data/root/MisVideos.json
+        content: |
+          {
+            "Path": "/media",
+            "PathInfo": {
+              "Path": "/media",
+              "NetworkPath": "",
+              "Type": "homevideos"
+            }
+          }
+        mode: '0644'
+        owner: 1000
+        group: 1000
+
+    - name: Desplegar Jellyfin en Docker
+      docker_container:
+        name: jellyfin
+        image: jellyfin/jellyfin:latest
+        restart_policy: unless-stopped
+        network_mode: "host"
+        volumes:
+          - /opt/jellyfin/config:/config
+          - /opt/jellyfin/cache:/cache
+          - /opt/jellyfin/media:/media
+        env:
+          TZ: "Europe/Madrid"
+          JELLYFIN_PublishedServerUrl: "http://0.0.0.0:8096"
+          JELLYFIN_CACHE_DIR: "/cache"
+          JELLYFIN_CONFIG_DIR: "/config"
+          JELLYFIN_DATA_DIR: "/config"
+          JELLYFIN_LOG_DIR: "/config/log"
+          JELLYFIN_WEB_DIR: "/jellyfin/jellyfin-web"
+        user: "1000:1000"
+
+    - name: Esperar a que Jellyfin esté disponible
+      uri:
+        url: "http://localhost:8096/health"
+        method: GET
+      register: result
+      until: result.status == 200
+      retries: 30
+      delay: 10
+
+    - name: Configurar idioma y metadatos
+      uri:
+        url: "http://localhost:8096/Startup/Configuration"
+        method: POST
+        body_format: json
+        body:
+          UICulture: "es-ES"
+          MetadataCountryCode: "ES"
+          PreferredMetadataLanguage: "es"
+        headers:
+          Content-Type: "application/json"
+      ignore_errors: yes
+
+    - name: Iniciar configuración de usuario
+      uri:
+        url: "http://localhost:8096/Startup/User"
+        method: GET
+      ignore_errors: yes
+
+    - name: Crear usuario admin
+      uri:
+        url: "http://localhost:8096/Startup/User"
+        method: POST
+        body_format: json
+        body:
+          Name: "admin"
+          Password: "root"
+        headers:
+          Content-Type: "application/json"
+      ignore_errors: yes
+
+    - name: Crear biblioteca "Mis Videos"
+      uri:
+        url: "http://localhost:8096/Library/VirtualFolders"
+        method: POST
+        body_format: json
+        body:
+          LibraryOptions:
+            EnableArchiveMediaFiles: false
+            EnablePhotos: true
+            EnableRealtimeMonitor: true
+            ExtractChapterImagesDuringLibraryScan: false
+            EnableChapterImageExtraction: false
+            DownloadImagesInAdvance: false
+            EnableInternetProviders: true
+            ImportMissingEpisodes: false
+            SaveLocalMetadata: false
+            EnableAutomaticSeriesGrouping: false
+            PreferredMetadataLanguage: "es"
+            MetadataCountryCode: "ES"
+            TypeOptions:
+              - Type: "Video"
+                ImageFetchers: ["Screen Grabber"]
+                ImageFetcherOrder: ["Screen Grabber"]
+            PathInfos:
+              - Path: "/media"
+        headers:
+          Content-Type: "application/json"
+        params:
+          collectionType: "homevideos"
+          refreshLibrary: "true"
+          name: "Mis Videos"
+      ignore_errors: yes
+
+    - name: Configurar acceso remoto
+      uri:
+        url: "http://localhost:8096/Startup/RemoteAccess"
+        method: POST
+        body_format: json
+        body:
+          EnableRemoteAccess: true
+          EnableAutomaticPortMapping: false
+        headers:
+          Content-Type: "application/json"
+      ignore_errors: yes
+
+    - name: Completar configuración inicial
+      uri:
+        url: "http://localhost:8096/Startup/Complete"
+        method: POST
+        headers:
+          Content-Type: "application/json"
+      ignore_errors: yes
+
+    - name: Esperar tiempo adicional para inicialización completa
+      pause:
+        seconds: 30
+
+    - name: Copiar script de configuración
+      copy:
+        src: ./configure-jellyfin.sh
+        dest: /tmp/configure-jellyfin.sh
+        mode: '0755'
+
+    - name: Instalar curl
+      apt:
+        name: curl
+        state: present
+
+    - name: Ejecutar script de configuración
+      command: /tmp/configure-jellyfin.sh
+      register: script_output
+      ignore_errors: yes
+
+    - name: Mostrar salida del script
+      debug:
+        var: script_output.stdout_lines
+      when: script_output.stdout_lines is defined 

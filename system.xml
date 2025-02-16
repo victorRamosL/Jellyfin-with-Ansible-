@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ServerConfiguration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <EnableRemoteAccess>true</EnableRemoteAccess>
+  <EnableUPnP>true</EnableUPnP>
+  <PublicPort>8096</PublicPort>
+  <PublicHttpsPort>8920</PublicHttpsPort>
+  <UICulture>es-ES</UICulture>
+  <MetadataCountryCode>ES</MetadataCountryCode>
+  <PreferredMetadataLanguage>es</PreferredMetadataLanguage>
+  <RemoteIPFilter />
+  <IsRemoteIPFilterBlacklist>false</IsRemoteIPFilterBlacklist>
+  <EnableAutomaticPortMapping>true</EnableAutomaticPortMapping>
+  <AutoRunWebApp>true</AutoRunWebApp>
+  <EnableRemoteAccess>true</EnableRemoteAccess>
+</ServerConfiguration> 

@@ -1,0 +1,120 @@
+- name: Desplegar Jellyfin en Docker en localhost
+  hosts: localhost
+  become: yes
+  tasks:
+
+    - name: Crear directorios para Jellyfin
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: 1000
+        group: 1000
+        mode: '0755'
+      loop:
+        - /opt/jellyfin/config
+        - /opt/jellyfin/config/users
+        - /opt/jellyfin/cache
+        - /opt/jellyfin/media
+
+    - name: Crear archivo de configuración system.xml
+      copy:
+        dest: /opt/jellyfin/config/system.xml
+        content: |
+          <?xml version="1.0" encoding="utf-8"?>
+          <ServerConfiguration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+            <UICulture>es-ES</UICulture>
+            <MetadataCountryCode>ES</MetadataCountryCode>
+            <PreferredMetadataLanguage>es</PreferredMetadataLanguage>
+            <ServerName>Mi Servidor Jellyfin</ServerName>
+          </ServerConfiguration>
+
+    - name: Crear archivo de configuración de usuario root
+      copy:
+        dest: /opt/jellyfin/config/users/root.json
+        content: |
+          {
+            "Name": "root",
+            "Password": "bolson",
+            "HasPassword": true,
+            "HasConfiguredPassword": true,
+            "EnableAutoLogin": false,
+            "Configuration": {
+              "EnableLocalPassword": true
+            },
+            "Policy": {
+              "IsAdministrator": true,
+              "EnableRemoteAccess": true
+            }
+          }
+
+    - name: Desplegar Jellyfin en Docker
+      docker_container:
+        name: jellyfin
+        image: jellyfin/jellyfin:latest
+        restart_policy: unless-stopped
+        network_mode: "host"
+        volumes:
+          - /opt/jellyfin/config:/config
+          - /opt/jellyfin/cache:/cache
+          - /opt/jellyfin/media:/media
+        env:
+          TZ: "Europe/Madrid"
+          JELLYFIN_PublishedServerUrl: "http://0.0.0.0:8096"
+
+    - name: Esperar a que Jellyfin esté disponible
+      uri:
+        url: "http://localhost:8096/health"
+        method: GET
+      register: result
+      until: result.status == 200
+      retries: 30
+      delay: 10
+
+    - name: Pausar para permitir inicialización completa
+      pause:
+        seconds: 30
+
+
+    - name: Autenticar en Jellyfin y obtener token de sesión
+      uri:
+        url: "http://localhost:8096/Users/AuthenticateByName"
+        method: POST
+        headers:
+          Content-Type: "application/json"
+        body: > 
+          {
+            "Username": "root",
+            "Pw": "bolson",
+            "App": "Ansible",
+            "RememberMe": true
+          }
+        body_format: json
+      register: auth_response
+
+    - name: Mostrar respuesta de autenticación
+      debug:
+        var: auth_response
+
+    - name: Guardar token de autenticación
+      set_fact:
+        jellyfin_token: "{{ auth_response.json.AccessToken }}"
+
+    - name: Crear biblioteca "Mis Videos" en Jellyfin vía API
+      uri:
+        url: "http://localhost:8096/Library/VirtualFolders"
+        method: POST
+        headers:
+          Content-Type: "application/json"
+          X-Emby-Token: "{{ jellyfin_token }}"
+        body_format: json
+        body:
+          Name: "Mis Videos"
+          Locations: ["/media"]
+          CollectionType: "movies"
+          EnableRealtimeMonitor: true
+          EnableImages: true
+      register: create_library_response
+
+    - name: Mostrar respuesta de la API
+      debug:
+        var: create_library_response
